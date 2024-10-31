@@ -89,7 +89,6 @@
             }
         }
 
-
         async function initializeMappings() {
             for (const network of networks) {
                 await fetchVaults(network);
@@ -114,7 +113,7 @@
                 Object.entries(mapping[selectedNetwork] || {}).forEach(([poolName, poolAddress]) => {
                     const option = document.createElement('option');
                     option.value = poolAddress;
-                    option.textContent = poolName;
+                    option.textContent = `${poolName} (${poolAddress.substring(0, 6)})`;
                     vaultSelect.appendChild(option);
                 });
             });
@@ -125,18 +124,19 @@
 
         function formatDate(timestamp) {
             const date = new Date(timestamp * 1000);
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
-            const day = String(date.getDate()).padStart(2, '0');
-            const hours = String(date.getHours()).padStart(2, '0');
-            const minutes = String(date.getMinutes()).padStart(2, '0');
-            const seconds = String(date.getSeconds()).padStart(2, '0');
+            const year = date.getUTCFullYear();
+            const month = String(date.getUTCMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+            const day = String(date.getUTCDate()).padStart(2, '0');
+            const hours = String(date.getUTCHours()).padStart(2, '0');
+            const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+            const seconds = String(date.getUTCSeconds()).padStart(2, '0');
             return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
         }
 
         async function generateCSV() {
             const blockchain = document.getElementById('blockchain').value;
             const vaultAddress = document.getElementById('vaultName').value;
+            const vaultName = document.getElementById('vaultName').selectedOptions[0].textContent.split(' (')[0]; // Get pool name
             const url = `https://yieldlayer.cian.app/${blockchain}/pool/home/vault/history/${vaultAddress}?limit=-1`;
 
             try {
@@ -155,9 +155,10 @@
 
                 const csvContent = [title, ...rows].map(e => e.join(",")).join("\n");
                 const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const fileName = `history_${vaultName.replace(/ /g, '_')}_${vaultAddress}_${Date.now()}.csv`;
                 const link = document.createElement("a");
                 link.setAttribute("href", URL.createObjectURL(blob));
-                link.setAttribute("download", `history_${vaultAddress}_${Date.now()}.csv`);
+                link.setAttribute("download", fileName);
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
