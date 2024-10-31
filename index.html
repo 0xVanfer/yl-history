@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yield Layer History</title>
+    <style>
+        body {
+            display: flex;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            height: 100vh; /* Full height of the viewport */
+        }
+        form {
+            width: 30%;
+            margin: 20px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        #output {
+            width: 70%;
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: calc(100vh - 40px); /* Subtracting top and bottom margin */
+            overflow-y: auto; /* Allow vertical scrolling */
+            background-color: #f9f9f9;
+            white-space: pre-wrap; /* Maintain formatting */
+            font-family: monospace; /* Use monospaced font */
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        @media (max-width: 768px) {
+            #output {
+                display: none; /* Hide output box on mobile */
+            }
+            form {
+                width: 100%; /* Full width on mobile */
+                margin: 20px 0; /* Top and bottom margin */
+            }
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        input, select, button {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #28a745;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+    </style>
+    <script>
+        const networks = ["ethereum", "arbitrum"];
+        const mapping = {};
+
+        async function fetchVaults(network) {
+            const url = `https://yieldlayer.cian.app/${network}/pool/home/vaults`;
+            const response = await fetch(url);
+            const res = await response.json();
+
+            if (res.data) {
+                res.data.forEach(item => {
+                    if (item.pool_address === "0x2011217D9b214Cf99c511be35447C69Dc51C8A70") {
+                        return;
+                    }
+
+                    mapping[network] = mapping[network] || {};
+                    mapping[network][item.pool_name] = item.pool_address;
+                });
+            }
+        }
+
+
+        async function initializeMappings() {
+            for (const network of networks) {
+                await fetchVaults(network);
+            }
+            populateDropdown();
+        }
+
+        function populateDropdown() {
+            const blockchainSelect = document.getElementById('blockchain');
+            const vaultSelect = document.getElementById('vaultName');
+
+            networks.forEach(network => {
+                const option = document.createElement('option');
+                option.value = network;
+                option.textContent = network.charAt(0).toUpperCase() + network.slice(1);
+                blockchainSelect.appendChild(option);
+            });
+
+            blockchainSelect.addEventListener('change', () => {
+                vaultSelect.innerHTML = ''; // Clear previous options
+                const selectedNetwork = blockchainSelect.value;
+                Object.entries(mapping[selectedNetwork] || {}).forEach(([poolName, poolAddress]) => {
+                    const option = document.createElement('option');
+                    option.value = poolAddress;
+                    option.textContent = poolName;
+                    vaultSelect.appendChild(option);
+                });
+            });
+
+            // Trigger change event to load initial vaults
+            blockchainSelect.dispatchEvent(new Event('change'));
+        }
+
+        function formatDate(timestamp) {
+            const date = new Date(timestamp * 1000);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        }
+
+        async function generateCSV() {
+            const blockchain = document.getElementById('blockchain').value;
+            const vaultAddress = document.getElementById('vaultName').value;
+            const url = `https://yieldlayer.cian.app/${blockchain}/pool/home/vault/history/${vaultAddress}?limit=-1`;
+
+            try {
+                const response = await fetch(url);
+                const res = await response.json();
+
+                const title = ["timestamp", "date", "apy", "tvl asset", "tvl usd", "holders count"];
+                const rows = res.data.map(line => [
+                    line.timestamp,
+                    formatDate(line.timestamp), // Use the new format function
+                    (line.apy * Math.pow(10, -2)).toString(),  // Assuming APY needs to shift right by 2
+                    line.tvl_base.toString(),
+                    line.tvl_usd.toString(),
+                    line.holders.length.toString()
+                ]);
+
+                const csvContent = [title, ...rows].map(e => e.join(",")).join("\n");
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                link.setAttribute("href", URL.createObjectURL(blob));
+                link.setAttribute("download", `history_${vaultAddress}_${Date.now()}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                // Display JSON output (limit to 30 entries)
+                const outputData = res.data.length > 30 ? res.data.slice(0, 30) : res.data;
+                document.getElementById('output').textContent = JSON.stringify(outputData, null, 2);
+            } catch (error) {
+                console.error('Error generating CSV:', error);
+                alert('Failed to generate CSV: ' + error.message);
+            }
+        }
+
+        window.onload = initializeMappings;
+    </script>
+</head>
+<body>
+    <form onsubmit="event.preventDefault(); generateCSV();">
+        <h1>Yield Layer History Info</h1>
+        <label for="blockchain">Select Blockchain:</label>
+        <select id="blockchain" required>
+            <!-- Options will be populated dynamically -->
+        </select>
+        <label for="vaultName">Select Vault:</label>
+        <select id="vaultName" required>
+            <!-- Options will be populated based on selected blockchain -->
+        </select>
+        <button type="submit">Generate CSV</button>
+    </form>
+    <div id="output"></div>
+</body>
+</html>
