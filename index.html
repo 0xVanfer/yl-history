@@ -143,12 +143,13 @@
                 const response = await fetch(url);
                 const res = await response.json();
 
-                const title = ["timestamp", "date", "apy", "tvl asset", "tvl usd", "holders count"];
+                const title = ["timestamp", "date", "apy", "tvl asset", "net tvl asset", "tvl usd", "holders count"];
                 const rows = res.data.map(line => [
                     line.timestamp,
                     formatDate(line.timestamp), // Use the new format function
                     (line.apy * Math.pow(10, -2)).toString(),  // Assuming APY needs to shift right by 2
                     line.tvl_base.toString(),
+                    line.net_tvl_base.toString(),
                     line.tvl_usd.toString(),
                     line.holders.length.toString()
                 ]);
